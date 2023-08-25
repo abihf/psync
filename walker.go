@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"time"
 )
 
 type Walker struct {
@@ -137,7 +138,7 @@ func (w *Walker) walk(path string, mu *sync.RWMutex) error {
 			continue
 		}
 
-		if srcStat.ModTime().After(dstStat.ModTime()) {
+		if srcStat.ModTime().Sub(dstStat.ModTime()) > 5*time.Second {
 			task := &DeleteFileTask{baseTask, "src is newer"}
 			task.sub = copyFile
 			w.add(task)
