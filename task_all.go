@@ -27,6 +27,10 @@ func (t *MkdirTask) Run() error {
 	if err != nil {
 		return err
 	}
+	err = t.setChown()
+	if err != nil {
+		return err
+	}
 	t.newMu.Unlock()
 	return nil
 }
