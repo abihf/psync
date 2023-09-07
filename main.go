@@ -1,36 +1,51 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
+
+	"github.com/spf13/pflag"
 )
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Printf("Usage: %s <src_dir> <dest_dir>", os.Args[0])
+	var jobCount int
+	pflag.IntVarP(&jobCount, "jobs", "j", maxParallelism(), "max jobs")
+
+	var dryRun bool
+	pflag.BoolVarP(&dryRun, "dry-run", "n", false, "Run diff without copy")
+
+	var verbose bool
+	pflag.BoolVarP(&verbose, "verbose", "v", false, "Show debug log")
+
+	// parse flags
+	pflag.Parse()
+
+	slog.SetDefault(slog.New(&logHandler{verbose: verbose}))
+
+	if pflag.NArg() != 2 {
+		fmt.Printf("Usage: %s [options] src_dir dst_dir\nOptions:\n", os.Args[0])
+		pflag.PrintDefaults()
 		os.Exit(1)
 	}
 
-	src := os.Args[1]
-	dst := os.Args[2]
+	src := pflag.Arg(0)
+	dst := pflag.Arg(1)
 
-	maxProc := maxParallelism()
+	var err error
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(err)
 
-	taskCh := make(chan Task, maxParallelism())
-	doneCh := make(chan bool)
-	for i := 0; i < maxProc; i++ {
-		go worker(doneCh, taskCh)
+	taskCh := make(chan Task, jobCount)
+	defer close(taskCh)
+
+	for i := 0; i < jobCount; i++ {
+		go worker(ctx, taskCh)
 	}
 
-	errCh := syncDir(src, dst, taskCh)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			slog.Error("error when syncing", "err", err)
-		}
-	case <-doneCh:
-		break
+	err = syncDir(ctx, src, dst, taskCh, int64(jobCount), dryRun)
+	if err != nil {
+		slog.Error("error when syncing", "err", err)
 	}
-	close(taskCh)
 }

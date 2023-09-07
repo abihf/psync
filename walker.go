@@ -1,35 +1,43 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/semaphore"
 )
 
 type Walker struct {
+	ctx      context.Context
 	src, dst string
 	dryRun   bool
 	log      *slog.Logger
-	wg       sync.WaitGroup
 	taskCh   chan Task
 	errCh    chan error
+
+	wg  sync.WaitGroup
+	sem *semaphore.Weighted
 }
 
-func syncDir(src, dst string, taskCh chan Task) chan error {
+func syncDir(ctx context.Context, src, dst string, taskCh chan Task, maxThread int64, dryRun bool) error {
 	log := slog.Default()
+	slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{}))
 
 	errCh := make(chan error)
 	w := Walker{
-		// ctx:    ctx,
+		ctx:    ctx,
 		src:    src,
 		dst:    dst,
 		taskCh: taskCh,
 		errCh:  errCh,
 		log:    log,
-		dryRun: os.Getenv("DRYRUN") == "1",
+		dryRun: dryRun,
+		sem:    semaphore.NewWeighted(maxThread),
 	}
 
 	w.wg.Add(1)
@@ -38,18 +46,36 @@ func syncDir(src, dst string, taskCh chan Task) chan error {
 		w.wg.Wait()
 		errCh <- nil
 	}()
-	return errCh
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return err
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
 
 func (w *Walker) walkE(path string, mu *sync.RWMutex) {
-	err := w.walk(path, mu)
+	defer w.wg.Done()
+
+	err := w.sem.Acquire(w.ctx, 1)
+	if err != nil {
+		w.log.Error("can not acquire semaphore", "err", err)
+		return
+	}
+	defer w.sem.Release(1)
+
+	err = w.walk(path, mu)
 	if err != nil {
 		w.errCh <- err
 	}
 }
+
 func (w *Walker) walk(path string, mu *sync.RWMutex) error {
 	var err error
-	defer w.wg.Done()
 
 	readdir, errs := AllSettled(os.ReadDir, w.src+path, w.dst+path)
 	if errs[0] != nil {

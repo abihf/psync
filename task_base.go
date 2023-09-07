@@ -42,13 +42,9 @@ func (t *BaseTask) Done(err error) {
 	if err != nil {
 		t.w.errCh <- err
 	}
-
 }
 
 func (t *BaseTask) Wait() func() {
-	// if !t.mu.TryRLock() {
-	// 	println("kenapa??")
-	// }
 	t.mu.RLock()
 	return t.mu.RUnlock
 }

@@ -2,10 +2,10 @@ package main
 
 import "context"
 
-func worker(doneCh chan bool, ch chan Task) {
+func worker(ctx context.Context, ch chan Task) {
 	for {
 		select {
-		case <-doneCh:
+		case <-ctx.Done():
 			return
 
 		case t := <-ch:
@@ -15,7 +15,6 @@ func worker(doneCh chan bool, ch chan Task) {
 			err := doWork(context.Background(), t)
 			t.Done(err)
 			if err != nil {
-				close(doneCh)
 				return
 			}
 		}
