@@ -188,6 +188,7 @@ func (w *Walker) walk(path string, mu *sync.RWMutex) error {
 	}
 	return nil
 }
+
 func (w *Walker) add(task Task) {
 	w.wg.Add(1)
 	w.taskCh <- task

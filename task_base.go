@@ -8,10 +8,7 @@ import (
 )
 
 type Task interface {
-	Wait() func()
-	Run() error
-	Sub() Task
-	Done(error)
+	Do() bool
 }
 
 type BaseTask struct {
@@ -33,20 +30,23 @@ func (t *BaseTask) srcName() string {
 	return t.w.src + t.path + t.name
 }
 
-func (t *BaseTask) Sub() Task {
-	return t.sub
-}
+func (t *BaseTask) wrap(fn func() error) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
-func (t *BaseTask) Done(err error) {
-	t.w.wg.Done()
+	defer t.w.wg.Done()
+	err := fn()
 	if err != nil {
 		t.w.errCh <- err
+		return false
 	}
-}
-
-func (t *BaseTask) Wait() func() {
-	t.mu.RLock()
-	return t.mu.RUnlock
+	if t.sub != nil {
+		t.w.wg.Add(1)
+		go func() {
+			t.w.taskCh <- t.sub
+		}()
+	}
+	return true
 }
 
 func (t *BaseTask) setChown() error {

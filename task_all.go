@@ -16,23 +16,25 @@ type MkdirTask struct {
 	newMu *sync.RWMutex
 }
 
-func (t *MkdirTask) Run() error {
-	perm := t.srcStat.Mode().Perm()
-	t.w.log.Info("mkdir", "parent", t.path, "name", t.name, "perm", perm.String())
-	if t.w.dryRun {
+func (t *MkdirTask) Do() bool {
+	return t.wrap(func() error {
+		perm := t.srcStat.Mode().Perm()
+		t.w.log.Info("mkdir", "parent", t.path, "name", t.name, "perm", perm.String())
+		if t.w.dryRun {
+			t.newMu.Unlock()
+			return nil
+		}
+		err := os.Mkdir(t.dstName(), perm)
+		if err != nil {
+			return err
+		}
+		err = t.setChown()
+		if err != nil {
+			return err
+		}
 		t.newMu.Unlock()
 		return nil
-	}
-	err := os.Mkdir(t.dstName(), perm)
-	if err != nil {
-		return err
-	}
-	err = t.setChown()
-	if err != nil {
-		return err
-	}
-	t.newMu.Unlock()
-	return nil
+	})
 }
 
 // ================================================================
@@ -41,20 +43,22 @@ type CopyTask struct {
 	BaseTask
 }
 
-func (t *CopyTask) Run() error {
-	if t.srcStat.Mode()&fs.ModeSymlink != 0 {
-		return t.copySymlink()
-	}
-	if !t.srcStat.Mode().IsRegular() {
-		t.w.log.Warn("skip non regular file", "path", t.path, "name", t.name)
-		return nil
-	}
+func (t *CopyTask) Do() bool {
+	return t.wrap(func() error {
+		if t.srcStat.Mode()&fs.ModeSymlink != 0 {
+			return t.copySymlink()
+		}
+		if !t.srcStat.Mode().IsRegular() {
+			t.w.log.Warn("skip non regular file", "path", t.path, "name", t.name)
+			return nil
+		}
 
-	err := t.copyFile()
-	if err != nil {
-		return err
-	}
-	return nil // os.Chmod(t.dstName(), t.src.Type().Perm())
+		err := t.copyFile()
+		if err != nil {
+			return err
+		}
+		return nil // os.Chmod(t.dstName(), t.src.Type().Perm())
+	})
 }
 
 func (t *CopyTask) copyFile() error {
@@ -116,12 +120,14 @@ type DeleteFileTask struct {
 	reason string
 }
 
-func (t *DeleteFileTask) Run() error {
-	t.w.log.Info("delete file", "parent", t.path, "name", t.name, "reason", t.reason)
-	if t.w.dryRun {
-		return nil
-	}
-	return os.Remove(t.dstName())
+func (t *DeleteFileTask) Do() bool {
+	return t.wrap(func() error {
+		t.w.log.Info("delete file", "parent", t.path, "name", t.name, "reason", t.reason)
+		if t.w.dryRun {
+			return nil
+		}
+		return os.Remove(t.dstName())
+	})
 }
 
 // ================================================================
@@ -131,12 +137,14 @@ type DeleteDirTask struct {
 	reason string
 }
 
-func (t *DeleteDirTask) Run() error {
-	t.w.log.Info("delete dir", "parent", t.path, "name", t.name, "reason", t.reason)
-	if t.w.dryRun {
-		return nil
-	}
-	return os.RemoveAll(t.dstName())
+func (t *DeleteDirTask) Do() bool {
+	return t.wrap(func() error {
+		t.w.log.Info("delete dir", "parent", t.path, "name", t.name, "reason", t.reason)
+		if t.w.dryRun {
+			return nil
+		}
+		return os.RemoveAll(t.dstName())
+	})
 }
 
 // ================================================================
@@ -145,17 +153,19 @@ type SetPermTask struct {
 	BaseTask
 }
 
-func (t *SetPermTask) Run() error {
-	srcPerm := t.srcStat.Mode().Perm()
-	dstPerm := t.dstStat.Mode().Perm()
-	t.w.log.Info("update permission", "parent", t.path, "name", t.name,
-		"before", dstPerm.String(), "after", srcPerm.String())
-	if t.w.dryRun {
-		return nil
-	}
-	err := t.setChown()
-	if err != nil {
-		return err
-	}
-	return os.Chmod(t.dstName(), srcPerm)
+func (t *SetPermTask) Do() bool {
+	return t.wrap(func() error {
+		srcPerm := t.srcStat.Mode().Perm()
+		dstPerm := t.dstStat.Mode().Perm()
+		t.w.log.Info("update permission", "parent", t.path, "name", t.name,
+			"before", dstPerm.String(), "after", srcPerm.String())
+		if t.w.dryRun {
+			return nil
+		}
+		err := t.setChown()
+		if err != nil {
+			return err
+		}
+		return os.Chmod(t.dstName(), srcPerm)
+	})
 }
