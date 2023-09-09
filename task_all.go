@@ -57,7 +57,7 @@ func (t *CopyTask) Do() bool {
 		if err != nil {
 			return err
 		}
-		return nil // os.Chmod(t.dstName(), t.src.Type().Perm())
+		return nil
 	})
 }
 
@@ -67,6 +67,25 @@ func (t *CopyTask) copyFile() error {
 		return nil
 	}
 
+	err := t.copyContent()
+	if err != nil {
+		return err
+	}
+
+	err = t.setChown()
+	if err != nil {
+		return err
+	}
+
+	err = os.Chmod(t.dstName(), t.srcStat.Mode().Perm())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *CopyTask) copyContent() error {
 	src, err := os.Open(t.srcName())
 	if err != nil {
 		return err
@@ -81,17 +100,6 @@ func (t *CopyTask) copyFile() error {
 
 	buf := make([]byte, 512)
 	_, err = io.CopyBuffer(dst, src, buf)
-	if err != nil {
-		return err
-	}
-	dst.Close()
-
-	err = t.setChown()
-	if err != nil {
-		return err
-	}
-
-	err = os.Chmod(t.dstName(), t.srcStat.Mode().Perm())
 	if err != nil {
 		return err
 	}

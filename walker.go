@@ -165,11 +165,11 @@ func (w *Walker) walk(path string, mu *sync.RWMutex) error {
 		}
 
 		if srcStat.ModTime().Sub(dstStat.ModTime()) > 5*time.Second {
-			task := &DeleteFileTask{baseTask, "src is newer"}
-			task.sub = copyFile
-			w.add(task)
+			w.add(copyFile)
+			continue
 		} else if !baseTask.hasSamePermission() {
 			w.add(&SetPermTask{baseTask})
+			continue
 		}
 	}
 
