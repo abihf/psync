@@ -6,7 +6,9 @@ import (
 	"io/fs"
 	"log/slog"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/sync/semaphore"
@@ -47,7 +49,16 @@ func syncDir(ctx context.Context, src, dst string, taskCh chan Task, maxThread i
 		errCh <- nil
 	}()
 
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc,
+		syscall.SIGHUP,
+		syscall.SIGINT,
+		syscall.SIGTERM,
+		syscall.SIGQUIT)
+
 	select {
+	case sig := <-sigc:
+		return fmt.Errorf("got '%s' signal", sig.String())
 	case err := <-errCh:
 		if err != nil {
 			return err
