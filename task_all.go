@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"math/rand"
 	"os"
 	"sync"
 )
@@ -67,7 +68,21 @@ func (t *CopyTask) copyFile() error {
 		return nil
 	}
 
-	err := t.copyContent()
+	var tmpFile string
+	for i := 0; i < 100; i++ {
+		tmpFile = fmt.Sprintf("%s.psync-%d", t.dstName(), rand.Int())
+		if !fileExist(tmpFile) {
+			break
+		}
+	}
+
+	err := t.copyContent(tmpFile)
+	if err != nil {
+		os.Remove(tmpFile)
+		return err
+	}
+
+	err = os.Rename(tmpFile, t.dstName())
 	if err != nil {
 		return err
 	}
@@ -85,21 +100,20 @@ func (t *CopyTask) copyFile() error {
 	return nil
 }
 
-func (t *CopyTask) copyContent() error {
+func (t *CopyTask) copyContent(tmpFile string) error {
 	src, err := os.Open(t.srcName())
 	if err != nil {
 		return err
 	}
 	defer src.Close()
 
-	dst, err := os.Create(t.dstName())
+	dst, err := os.Create(tmpFile)
 	if err != nil {
 		return err
 	}
 	defer dst.Close()
 
-	buf := make([]byte, 512)
-	_, err = io.CopyBuffer(dst, src, buf)
+	_, err = io.Copy(dst, src)
 	if err != nil {
 		return err
 	}

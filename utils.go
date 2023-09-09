@@ -1,6 +1,9 @@
 package main
 
-import "runtime"
+import (
+	"os"
+	"runtime"
+)
 
 func sliceToMap[K comparable, V any](slice []V, convert func(V) K) map[K]V {
 	res := make(map[K]V, len(slice))
@@ -64,4 +67,9 @@ func maxParallelism() int {
 		return maxProcs
 	}
 	return numCPU
+}
+
+func fileExist(name string) bool {
+	_, err := os.Stat(name)
+	return err == nil
 }
