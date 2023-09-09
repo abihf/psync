@@ -69,10 +69,12 @@ func (t *CopyTask) copyFile() error {
 	}
 
 	var tmpFile string
-	for i := 0; i < 100; i++ {
-		tmpFile = fmt.Sprintf("%s.psync-%d", t.dstName(), rand.Int())
+	for i := 0; ; i++ {
+		tmpFile = fmt.Sprintf("%s%s.psync-%s-%d", t.w.dst, t.path, t.name, rand.Int())
 		if !fileExist(tmpFile) {
 			break
+		} else if i >= 100 {
+			return fmt.Errorf("can not create temporary file for copy")
 		}
 	}
 
