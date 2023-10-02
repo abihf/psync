@@ -182,6 +182,8 @@ func (w *Walker) walk(path string, mu *sync.RWMutex) error {
 			w.add(&SetPermTask{baseTask})
 			continue
 		}
+		// do nothing
+		slog.Debug("skip unchanged", "path", path, "name", name)
 	}
 
 	for name, dstEntry := range dstMap {

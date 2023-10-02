@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/lmittmann/tint"
 	"github.com/spf13/pflag"
 )
 
@@ -22,7 +23,11 @@ func main() {
 	// parse flags
 	pflag.Parse()
 
-	slog.SetDefault(slog.New(&logHandler{verbose: verbose}))
+	logLevel := slog.LevelInfo
+	if verbose {
+		logLevel = slog.LevelDebug
+	}
+	slog.SetDefault(slog.New(tint.NewHandler(os.Stdout, &tint.Options{TimeFormat: "15:04:05.000", Level: logLevel})))
 
 	if pflag.NArg() != 2 {
 		fmt.Printf("Usage: %s [options] src_dir dst_dir\nOptions:\n", os.Args[0])
